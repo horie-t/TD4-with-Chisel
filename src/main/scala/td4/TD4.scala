@@ -16,9 +16,9 @@ class TD4Top extends Module {
   })
 
   // 1Hz, 10Hzのパルスを生成してクロック信号の代わりにする
-  val clockFrequency = 1000000    // 使用するFPGAボードの周波数(Hz)に合わせて変更する
-  val (clockCount, hz1Pulse) = Counter(true.B, clockFrequency)
-  val (helz1Count, hz10Pulse) = Counter(hz1Pulse, 10)
+  val clockFrequency = 100000000    // 使用するFPGAボードの周波数(Hz)
+  val (clockCount, hz10Pulse) = Counter(true.B, clockFrequency / 10)
+  val (helz10Count, hz1Pulse) = Counter(hz10Pulse, 10)
 
   // マニュアル・クロック用のボタンのチャタリングを除去
   val manualClock = Debounce(io.manualClock, clockFrequency)
