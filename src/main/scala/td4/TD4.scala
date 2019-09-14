@@ -9,21 +9,22 @@ import chisel3.core.withClockAndReset
   */
 class TD4 extends Module {
   val io = IO(new Bundle() {
-    val inst = Input(Bool())    // 命令(現在は、真ならMOV A, A、偽ならNOT A)
-    val out = Output(UInt(1.W)) // Aレジスタの内容
+    val select = Input(UInt(2.W)) // レジスタ・セレクタ
+    val load   = Input(Vec(4, Bool())) // 真の位置のレジスタに値をロードする
+    val out    = Output(UInt(4.W)) // Aレジスタの内容
   })
 
-  // 1bitのAレジスタ(0で初期化)
-  val regA = RegInit(1.U(1.W))
-  
-  when (io.inst) {
-    regA := regA    // MOV A, A
-  } .otherwise {
-    regA := ~regA  // NOT A
+  // 4bitのレジスタを4つ作成。レジスタの番号のビット位置のビットを立てる
+  val regs = RegInit(Vec(1.U(4.W), 2.U(4.W), 4.U(4.W), 8.U(4.W)))
+
+  // MOV X, X
+  val selectedVal = regs(io.select)
+  for (i <- 0 until regs.size) {
+    regs(i) := Mux(io.load(i), selectedVal, regs(i))
   }
 
   // Aレジスタの内容を出力しておく
-  io.out := regA
+  io.out := regs(0)
 }
 
 /**
@@ -52,9 +53,10 @@ class TD4Top extends Module {
     val isManualClock = Input(Bool()) // クロック信号をマニュアル操作するか
     val manualClock   = Input(Bool()) // マニュアル・クロック信号
     val isHz10        = Input(Bool()) // 10Hzのクロックで動作するか？ 偽の場合は1Hzで動作します。
-    val inst          = Input(Bool()) // 命令(現在は、真ならMOV A, A、偽ならNOT A)
+    val select        = Input(UInt(2.W)) // レジスタ・セレクタ
+    val load          = Input(Vec(4, Bool())) // 真の位置のレジスタに値をロードする
 
-    val out           = Output(UInt(1.W)) // LEDへの出力
+    val out           = Output(UInt(4.W)) // LEDへの出力
   })
 
   // 1Hz, 10Hzのパルスを生成してクロック信号の代わりにする
@@ -75,7 +77,8 @@ class TD4Top extends Module {
   // CPU RESETボタンは負論理なので反転する。
   withClockAndReset(td4Clock, ~io.cpuReset) {
     val core = Module(new TD4())
-    core.io.inst := io.inst
+    core.io.select := io.select
+    core.io.load := io.load
     io.out := core.io.out
   }
 }
