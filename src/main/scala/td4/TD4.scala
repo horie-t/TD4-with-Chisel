@@ -17,14 +17,18 @@ class TD4Top extends Module {
 
   // 1Hz, 10Hzのパルスを生成してクロック信号の代わりにする
   val clockFrequency = 100000000    // 使用するFPGAボードの周波数(Hz)
-  val (clockCount, hz10Pulse) = Counter(true.B, clockFrequency / 10)
+  val (clockCount, hz10Pulse) = Counter(true.B, clockFrequency / 10 / 2)
+  val hz10Clock = RegInit(true.B)
+  hz10Clock := Mux(hz10Pulse, ~hz10Clock, hz10Clock)
   val (helz10Count, hz1Pulse) = Counter(hz10Pulse, 10)
+  val hz1Clock = RegInit(true.B)
+  hz1Clock := Mux(hz1Pulse, ~hz1Clock, hz1Clock)
 
   // マニュアル・クロック用のボタンのチャタリングを除去
   val manualClock = Debounce(io.manualClock, clockFrequency)
   val td4Clock = Mux(io.isManualClock,
-    manualClock,
-    Mux(io.isHz10, hz10Pulse, hz1Pulse)).asClock
+    io.manualClock,
+    Mux(io.isHz10, hz10Clock, hz1Clock)).asClock
 
   // CPU RESETボタンは負論理なので反転する。
   withClockAndReset(td4Clock, ~io.cpuReset) {
