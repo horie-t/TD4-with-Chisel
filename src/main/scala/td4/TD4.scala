@@ -5,6 +5,41 @@ import chisel3.util._
 import chisel3.core.withClockAndReset
 
 /**
+  * TD4 CPUコア
+  */
+class TD4 extends Module {
+  val io = IO(new Bundle() {
+    val out = Output(UInt(1.W))
+  })
+
+  // 1bitのAレジスタ(0で初期化)
+  val regA = RegInit(1.U(1.W))
+
+  // NOT A, A
+  regA := ~regA
+
+  // Aレジスタの内容を出力しておく
+  io.out := regA
+}
+
+/**
+  * ROM
+  */
+class ROM extends Module {
+  val io = IO(new Bundle() {
+    val addr = Input(UInt(4.W)) // アドレス
+    val data = Output(UInt(8.W)) // データ
+  })
+
+  // ROMの中身
+  val rom = VecInit(List(
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+  ).map(_.asUInt(8.W)))
+
+  io.data := rom(io.addr)
+}
+
+/**
   * TD4のトップモジュール
   */
 class TD4Top extends Module {
@@ -13,6 +48,8 @@ class TD4Top extends Module {
     val isManualClock = Input(Bool()) // クロック信号をマニュアル操作するか
     val manualClock   = Input(Bool()) // マニュアル・クロック信号
     val isHz10        = Input(Bool()) // 10Hzのクロックで動作するか？ 偽の場合は1Hzで動作します。
+
+    val out           = Output(UInt(1.W)) // LEDへの出力
   })
 
   // 1Hz, 10Hzのパルスを生成してクロック信号の代わりにする
@@ -32,7 +69,8 @@ class TD4Top extends Module {
 
   // CPU RESETボタンは負論理なので反転する。
   withClockAndReset(td4Clock, ~io.cpuReset) {
-    // TODO: 実装する
+    val core = Module(new TD4())
+    io.out := core.io.out
   }
 }
 
