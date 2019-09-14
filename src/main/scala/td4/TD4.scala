@@ -9,14 +9,18 @@ import chisel3.core.withClockAndReset
   */
 class TD4 extends Module {
   val io = IO(new Bundle() {
-    val out = Output(UInt(1.W))
+    val inst = Input(Bool())    // 命令(現在は、真ならMOV A, A、偽ならNOT A)
+    val out = Output(UInt(1.W)) // Aレジスタの内容
   })
 
   // 1bitのAレジスタ(0で初期化)
   val regA = RegInit(1.U(1.W))
-
-  // NOT A, A
-  regA := ~regA
+  
+  when (io.inst) {
+    regA := regA    // MOV A, A
+  } .otherwise {
+    regA := ~regA  // NOT A
+  }
 
   // Aレジスタの内容を出力しておく
   io.out := regA
@@ -48,6 +52,7 @@ class TD4Top extends Module {
     val isManualClock = Input(Bool()) // クロック信号をマニュアル操作するか
     val manualClock   = Input(Bool()) // マニュアル・クロック信号
     val isHz10        = Input(Bool()) // 10Hzのクロックで動作するか？ 偽の場合は1Hzで動作します。
+    val inst          = Input(Bool()) // 命令(現在は、真ならMOV A, A、偽ならNOT A)
 
     val out           = Output(UInt(1.W)) // LEDへの出力
   })
@@ -70,6 +75,7 @@ class TD4Top extends Module {
   // CPU RESETボタンは負論理なので反転する。
   withClockAndReset(td4Clock, ~io.cpuReset) {
     val core = Module(new TD4())
+    core.io.inst := io.inst
     io.out := core.io.out
   }
 }
