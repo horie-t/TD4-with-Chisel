@@ -11,38 +11,78 @@ class TD4 extends Module {
   val io = IO(new Bundle() {
     val iAddr  = Output(UInt(4.W)) // 命令アドレス
     val iData  = Input(UInt(8.W))  // 命令データ
-    val select = Input(UInt(2.W)) // レジスタ・セレクタ
-    val load   = Input(Vec(4, Bool())) // 真の位置のレジスタに値をロードする
-
     val in     = Input(UInt(4.W))  // 入力ポートへ
     val out    = Output(UInt(4.W)) // 出力ポートへ
   })
 
+  /*
+   * レジスタ定義
+   */
   // 汎用レジスタ
-  val regA = RegInit(1.U(4.W)) // Aレジスタ
-  val regB = RegInit(2.U(4.W)) // Bレジスタ
-  val regOut = RegInit(4.U(4.W)) // 出力ポート用レジスタ
-  val programCounter = RegInit(0.U(4.W)) // プログラム・カウンター
+  val regA = RegInit(0.U(4.W)) // Aレジスタ
+  val regB = RegInit(0.U(4.W)) // Bレジスタ
 
+  // 出力ポート用レジスタ
+  val regOut = RegInit(0.U(4.W))
+
+  // プログラム・カウンタ
+  val programCounter = RegInit(0.U(4.W))
+
+  // キャリーフラグ
   val carryFlag = RegInit(false.B)
 
-  val selectedVal = MuxLookup(io.select, 0.U(4.W), Seq(
+  /*
+   * 命令デコーダ
+   */
+  val opData = Cat(io.iData(7, 4), carryFlag)
+  val ctrlSig = MuxCase(0.U(6.W), Seq(
+    // 本のデコーダの設計の最初の真理値表
+    ((opData === BitPat("b0000?")) -> "b000111".U), // ADD A,Im
+    ((opData === BitPat("b0001?")) -> "b010111".U), // MOV A,B
+    ((opData === BitPat("b0010?")) -> "b100111".U), // IN  A
+    ((opData === BitPat("b0011?")) -> "b110111".U), // MOV A,Im
+    ((opData === BitPat("b0100?")) -> "b001011".U), // MOV B,A
+    ((opData === BitPat("b0101?")) -> "b011011".U), // ADD B,Im
+    ((opData === BitPat("b0110?")) -> "b101011".U), // IN  B
+    ((opData === BitPat("b0111?")) -> "b111011".U), // MOV B,Im
+    ((opData === BitPat("b1001?")) -> "b011101".U), // OUT B
+    ((opData === BitPat("b1011?")) -> "b111101".U), // OUT Im
+    ((opData === BitPat("b11100")) -> "b111110".U), // JNC(C=0)
+    ((opData === BitPat("b11101")) -> "b111111".U), // JNC(C=1)"b??1111"
+    ((opData === BitPat("b1111?")) -> "b111110".U)  // JMP
+  ))
+  val select = ctrlSig(5, 4)
+  // 本はloadの値は、負論理なので否定して、順序も逆なのでReverseする
+  val load   = Reverse(~ctrlSig(3, 0))
+
+  /*
+   * レジスタ読み込み
+   */
+  val selectedVal = MuxLookup(select, 0.U(4.W), Seq(
     (0.U(4.W) -> regA),
     (1.U(4.W) -> regB),
     (2.U(4.W) -> io.in) // 3.Uの分はデフォルト値で代用
   ))
+
+  /*
+   * 演算処理(ALU)
+   */
   val addedVal = selectedVal +& io.iData(3, 0)
   carryFlag := addedVal(4)
-  when (io.load(0)) {
+
+  /*
+   * レジスタ書き戻し
+   */
+  when (load(0)) {
     regA := addedVal(3, 0)
   }
-  when (io.load(1)) {
+  when (load(1)) {
     regB := addedVal(3, 0)
   }
-  when (io.load(2)) {
+  when (load(2)) {
     regOut := addedVal(3, 0)
   }
-  when (io.load(3)) {
+  when (load(3)) {
     programCounter := addedVal
   } .otherwise {
     programCounter := programCounter + 1.U
@@ -64,9 +104,10 @@ class ROM extends Module {
 
   // ROMの中身
   val rom = VecInit(List(
-    0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00,
+    // Lチカプログラム
+    0xB3, 0xB6, 0xBC, 0xB8,
+    0xB8, 0xBC, 0xB6, 0xB3,
+    0xB1, 0xF0, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00
   ).map(_.asUInt(8.W)))
 
@@ -82,9 +123,6 @@ class TD4Top extends Module {
     val isManualClock = Input(Bool()) // クロック信号をマニュアル操作するか
     val manualClock   = Input(Bool()) // マニュアル・クロック信号
     val isHz10        = Input(Bool()) // 10Hzのクロックで動作するか？ 偽の場合は1Hzで動作します。
-    val select        = Input(UInt(2.W)) // レジスタ・セレクタ
-    val load          = Input(Vec(4, Bool())) // 真の位置のレジスタに値をロードする
-
     val in            = Input(UInt(4.W))  // 入力ポート
     val out           = Output(UInt(4.W)) // 出力ポート
   })
@@ -107,8 +145,6 @@ class TD4Top extends Module {
   // CPU RESETボタンは負論理なので反転する。
   withClockAndReset(td4Clock, ~io.cpuReset) {
     val core = Module(new TD4())
-    core.io.select := io.select
-    core.io.load := io.load
     core.io.in := io.in
     io.out := core.io.out
 
