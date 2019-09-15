@@ -9,29 +9,47 @@ import chisel3.core.withClockAndReset
   */
 class TD4 extends Module {
   val io = IO(new Bundle() {
+    val iAddr  = Output(UInt(4.W)) // 命令アドレス
+    val iData  = Input(UInt(8.W))  // 命令データ
     val select = Input(UInt(2.W)) // レジスタ・セレクタ
     val load   = Input(Vec(4, Bool())) // 真の位置のレジスタに値をロードする
-    val imData = Input(UInt(4.W)) // 即値データ
-    val out    = Output(UInt(4.W)) // Aレジスタの内容
+
+    val out    = Output(UInt(4.W)) // テスト用出力値
   })
 
-  // 4bitのレジスタを4つ作成。レジスタの番号のビット位置のビットを立てる
-  val regs = RegInit(Vec(1.U(4.W), 2.U(4.W), 4.U(4.W), 8.U(4.W)))
+  // 汎用レジスタ
+  val regA = RegInit(1.U(4.W)) // Aレジスタ
+  val regB = RegInit(2.U(4.W)) // Bレジスタ
+  val regC = RegInit(4.U(4.W)) // (Cレジスタ。最終的には別のものになる)
+  val programCounter = RegInit(0.U(4.W)) // プログラム・カウンター
+
   val carryFlag = RegInit(false.B)
 
   val selectedVal = MuxLookup(io.select, 0.U(4.W), Seq(
-    (0.U(4.W) -> regs(0)),
-    (1.U(4.W) -> regs(1)),
-    (2.U(4.W) -> regs(2)) // 3.Uの分はデフォルト値で代用
+    (0.U(4.W) -> regA),
+    (1.U(4.W) -> regB),
+    (2.U(4.W) -> regC) // 3.Uの分はデフォルト値で代用
   ))
-  val addedVal = selectedVal +& io.imData
+  val addedVal = selectedVal +& io.iData(3, 0)
   carryFlag := addedVal(4)
-  for (i <- 0 until regs.size) {
-    regs(i) := Mux(io.load(i), addedVal(3, 0), regs(i))
+  when (io.load(0)) {
+    regA := addedVal(3, 0)
+  }
+  when (io.load(1)) {
+    regB := addedVal(3, 0)
+  }
+  when (io.load(2)) {
+    regC := addedVal(3, 0)
+  }
+  when (io.load(3)) {
+    programCounter := addedVal
+  } .otherwise {
+    programCounter := programCounter + 1.U
   }
 
-  // Aレジスタの内容を出力しておく
-  io.out := regs(0)
+  io.iAddr := programCounter
+  // 即値を出しておく
+  io.out := io.iData(3, 0)
 }
 
 /**
@@ -45,7 +63,10 @@ class ROM extends Module {
 
   // ROMの中身
   val rom = VecInit(List(
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    0x00, 0x01, 0x02, 0x03,
+    0x04, 0x05, 0x06, 0x07,
+    0x08, 0x09, 0x0A, 0x0B,
+    0x0C, 0x0D, 0x0E, 0x0F
   ).map(_.asUInt(8.W)))
 
   io.data := rom(io.addr)
@@ -62,7 +83,6 @@ class TD4Top extends Module {
     val isHz10        = Input(Bool()) // 10Hzのクロックで動作するか？ 偽の場合は1Hzで動作します。
     val select        = Input(UInt(2.W)) // レジスタ・セレクタ
     val load          = Input(Vec(4, Bool())) // 真の位置のレジスタに値をロードする
-    val imData        = Input(UInt(4.W)) // 即値データ
 
     val out           = Output(UInt(4.W)) // LEDへの出力
   })
@@ -87,8 +107,11 @@ class TD4Top extends Module {
     val core = Module(new TD4())
     core.io.select := io.select
     core.io.load := io.load
-    core.io.imData := io.imData
     io.out := core.io.out
+
+    val rom = Module(new ROM())
+    rom.io.addr := core.io.iAddr
+    core.io.iData := rom.io.data
   }
 }
 
