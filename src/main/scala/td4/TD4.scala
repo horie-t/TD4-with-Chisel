@@ -11,16 +11,17 @@ class TD4 extends Module {
   val io = IO(new Bundle() {
     val select = Input(UInt(2.W)) // レジスタ・セレクタ
     val load   = Input(Vec(4, Bool())) // 真の位置のレジスタに値をロードする
+    val imData = Input(UInt(4.W)) // 即値データ
     val out    = Output(UInt(4.W)) // Aレジスタの内容
   })
 
   // 4bitのレジスタを4つ作成。レジスタの番号のビット位置のビットを立てる
   val regs = RegInit(Vec(1.U(4.W), 2.U(4.W), 4.U(4.W), 8.U(4.W)))
 
-  // MOV X, X
   val selectedVal = regs(io.select)
+  val addedVal = selectedVal + io.imData
   for (i <- 0 until regs.size) {
-    regs(i) := Mux(io.load(i), selectedVal, regs(i))
+    regs(i) := Mux(io.load(i), addedVal, regs(i))
   }
 
   // Aレジスタの内容を出力しておく
@@ -55,6 +56,7 @@ class TD4Top extends Module {
     val isHz10        = Input(Bool()) // 10Hzのクロックで動作するか？ 偽の場合は1Hzで動作します。
     val select        = Input(UInt(2.W)) // レジスタ・セレクタ
     val load          = Input(Vec(4, Bool())) // 真の位置のレジスタに値をロードする
+    val imData        = Input(UInt(4.W)) // 即値データ
 
     val out           = Output(UInt(4.W)) // LEDへの出力
   })
@@ -79,6 +81,7 @@ class TD4Top extends Module {
     val core = Module(new TD4())
     core.io.select := io.select
     core.io.load := io.load
+    core.io.imData := io.imData
     io.out := core.io.out
   }
 }
