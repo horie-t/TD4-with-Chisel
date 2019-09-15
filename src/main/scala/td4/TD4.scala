@@ -14,13 +14,14 @@ class TD4 extends Module {
     val select = Input(UInt(2.W)) // レジスタ・セレクタ
     val load   = Input(Vec(4, Bool())) // 真の位置のレジスタに値をロードする
 
-    val out    = Output(UInt(4.W)) // テスト用出力値
+    val in     = Input(UInt(4.W))  // 入力ポートへ
+    val out    = Output(UInt(4.W)) // 出力ポートへ
   })
 
   // 汎用レジスタ
   val regA = RegInit(1.U(4.W)) // Aレジスタ
   val regB = RegInit(2.U(4.W)) // Bレジスタ
-  val regC = RegInit(4.U(4.W)) // (Cレジスタ。最終的には別のものになる)
+  val regOut = RegInit(4.U(4.W)) // 出力ポート用レジスタ
   val programCounter = RegInit(0.U(4.W)) // プログラム・カウンター
 
   val carryFlag = RegInit(false.B)
@@ -28,7 +29,7 @@ class TD4 extends Module {
   val selectedVal = MuxLookup(io.select, 0.U(4.W), Seq(
     (0.U(4.W) -> regA),
     (1.U(4.W) -> regB),
-    (2.U(4.W) -> regC) // 3.Uの分はデフォルト値で代用
+    (2.U(4.W) -> io.in) // 3.Uの分はデフォルト値で代用
   ))
   val addedVal = selectedVal +& io.iData(3, 0)
   carryFlag := addedVal(4)
@@ -39,7 +40,7 @@ class TD4 extends Module {
     regB := addedVal(3, 0)
   }
   when (io.load(2)) {
-    regC := addedVal(3, 0)
+    regOut := addedVal(3, 0)
   }
   when (io.load(3)) {
     programCounter := addedVal
@@ -47,9 +48,9 @@ class TD4 extends Module {
     programCounter := programCounter + 1.U
   }
 
+  // 出力
   io.iAddr := programCounter
-  // 即値を出しておく
-  io.out := io.iData(3, 0)
+  io.out := regOut
 }
 
 /**
@@ -63,10 +64,10 @@ class ROM extends Module {
 
   // ROMの中身
   val rom = VecInit(List(
-    0x00, 0x01, 0x02, 0x03,
-    0x04, 0x05, 0x06, 0x07,
-    0x08, 0x09, 0x0A, 0x0B,
-    0x0C, 0x0D, 0x0E, 0x0F
+    0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00
   ).map(_.asUInt(8.W)))
 
   io.data := rom(io.addr)
@@ -84,7 +85,8 @@ class TD4Top extends Module {
     val select        = Input(UInt(2.W)) // レジスタ・セレクタ
     val load          = Input(Vec(4, Bool())) // 真の位置のレジスタに値をロードする
 
-    val out           = Output(UInt(4.W)) // LEDへの出力
+    val in            = Input(UInt(4.W))  // 入力ポート
+    val out           = Output(UInt(4.W)) // 出力ポート
   })
 
   // 1Hz, 10Hzのパルスを生成してクロック信号の代わりにする
@@ -107,6 +109,7 @@ class TD4Top extends Module {
     val core = Module(new TD4())
     core.io.select := io.select
     core.io.load := io.load
+    core.io.in := io.in
     io.out := core.io.out
 
     val rom = Module(new ROM())
