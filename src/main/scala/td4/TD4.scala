@@ -18,7 +18,11 @@ class TD4 extends Module {
   // 4bitのレジスタを4つ作成。レジスタの番号のビット位置のビットを立てる
   val regs = RegInit(Vec(1.U(4.W), 2.U(4.W), 4.U(4.W), 8.U(4.W)))
 
-  val selectedVal = regs(io.select)
+  val selectedVal = MuxLookup(io.select, 0.U(4.W), Seq(
+    (0.U(4.W) -> regs(0)),
+    (1.U(4.W) -> regs(1)),
+    (2.U(4.W) -> regs(2)) // 3.Uの分はデフォルト値で代用
+  ))
   val addedVal = selectedVal + io.imData
   for (i <- 0 until regs.size) {
     regs(i) := Mux(io.load(i), addedVal, regs(i))
